@@ -1,0 +1,1154 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="robots" content="noarchive">
+<meta http-equiv="cache-control" content="no-cache">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+
+<!--
+A Sudoku player that is geared towards gracefully solving difficult Sudokus.
+Nearly all Sudoku players in the world are clunky. Mine is not.
+Anyone who can solve difficult Sudokus knows that the notes are everything,
+and they also know that generating the notes by hand is extremely tedious,
+so my player does the following...
+ - auto generates notes at start and when erasing, avoiding obvious contradictions
+ - auto removes notes when placing numbers
+ - does not let you place a number if the notes do not allow it
+ - does not let you place a note if it creates an obvious contradiction
+ - uses "number first" input. To place a number, select the number THEN place it
+ - nicely highlights notes and numbers of selected number
+
+Depending on your device...
+- Instead of turning notes-editing on, you can always right click
+  to edit notes. On a mobile-device, this is touch-and-hold.
+  When I play, I never turn notes-editing on (I right click).
+- Less useful, but, with a keyboard, you can also use
+  number keys to select numbers.
+
+I was inspired by the following great Sudoku app...
+  https://play.google.com/store/apps/details?id=sudoku.puzzle.free.game.brain
+  https://apps.apple.com/us/app/sudoku-puzzle-brain-games/id1492978794
+Unlike this app, my player does not require watching ads and lets you load your
+  own puzzle, and mine does not have the constant risk of accidentally leaving
+  "number first" mode.
+I cannot alert the player when a number is placed incorrectly.
+  This could be a pro or a con depending on your preference.
+  Mine is a player, not a solver, so I don't know the solution.
+  I do alert the player when a number that disagrees with the notes is placed.
+Pros of their app over mine...
+- Theirs looks nicer on mobile devices, partly due to nice screen autofill
+  and no risk of webpage scrolling. Though, being only an app, their computer
+  compatibility is horrible.
+- Theirs can give you a hint that includes the reason why the move can be made,
+  though their hints are too much. Just tell me the TYPE of strategy to look for
+  rather than the exact where and why of it. Note that all of their puzzles can
+  be solved using only a small subset of strategies, and watching ads is
+  required to get hints. My next goal would be to provide a button that would list
+  which strategies can be currently done.
+
+When loading a puzzle, whitespace is ignored.
+Anything else not 1-9 is considered a blank (I prefer using 0's).
+The number of solutions is not checked. This is a player, not a solver.
+However, if any of the clues have obvious contradictions (more than
+  one of the same number in same row, column, or block),
+  this is detected.
+-->
+
+
+<script>
+
+////////////////////////////////////////
+////  insert default puzzle here!!  ////
+////////////////////////////////////////
+
+const puzzle = `
+040100090
+501024030
+037000002
+010009043
+900305200
+400000000
+000030000
+060700850
+000000000
+`;  // not very hard if you find the jellyfish in the 8's. A couple naked pairs need to found before finding the jellyfish.
+
+</script>
+
+
+
+<style>
+
+body {
+    font-family: Arial, sans-serif;
+    text-align: center;
+    background: #fff none;
+    white-space: nowrap;
+}
+
+.block {
+    width: 96px;
+    height: 96px;
+    border: 1px solid #666;
+    display: inline-block;
+    vertical-align: middle;
+    font-size: 1px;  /* font-size affects vertical-align! inherited */
+}
+
+
+.cell, .clue, .solved {
+    width: 30px;
+    height: 30px;
+    background-color: #fff;
+    border: 1px solid #ccc;  /* adds 2 pixels to width and height */
+    display: inline-block;
+    vertical-align: middle;
+    text-align: center;
+    cursor: pointer;
+    user-select: none;
+}
+.solved {
+    font-size: 25px;
+    color: #008;
+}
+.clue {
+    font-size: 25px;
+    color: #000;
+}
+
+.wrong {
+    font-size: 25px;
+    color: #f00;
+}
+
+.highlighted {background-color: #ddf;}
+.undid_cell {background-color: #0a0;}
+
+
+
+.notebox, .noteboxHighlighted {
+    width: 9px;
+    height: 9px;
+    display: inline-block;
+    vertical-align: middle;
+    text-align: center;
+    font-size: 7px;
+}
+.notebox {
+    background-color: #fff;
+    color: #bbb;
+}
+.noteboxHighlighted {
+    background-color: #44d;
+    color: #fff;
+}
+
+.wrong_note {
+    color: #f00;
+}
+.undid_note {
+    background-color: #0a0;
+}
+
+
+
+.number_button, .number_button_selected, .number_button_notes, .number_button_notes_selected {
+    width: 27px;
+    height: 38px;
+    display: inline-block;
+    vertical-align: middle;
+    text-align: center;
+    font-size: 30px;
+    cursor: pointer;
+    user-select: none;
+}
+.number_button {
+    border: 2px solid rgba(255,255,255,0);
+    color: #008;
+}
+.number_button_selected {
+    border: 2px solid #008;
+    color: #008;
+}
+.number_button_notes {
+    border: 2px solid rgba(255,255,255,0);
+    color: #aaa;
+}
+.number_button_notes_selected {
+    border: 2px solid #aaa;
+    color: #aaa;
+}
+
+.done {
+    border: 2px solid rgba(255,255,255,0);
+    color: rgba(255,255,255,0);
+    cursor: auto;
+}
+
+
+
+.notesToggleOn, .notesToggleOff {
+    font-size: 150%;
+    cursor: pointer;
+    user-select: none;
+}
+.notesToggleOn {
+    color: #000;
+    background-color: #cfc;
+}
+.notesToggleOff {
+    color: #ccc;
+    background-color: rgba(255,255,255,0);
+}
+
+
+
+.undo {
+    color: #a00;
+    cursor: pointer;
+    user-select: none;
+}
+
+</style>
+
+
+<title>Sudoku player</title>
+
+</head>
+
+
+
+
+
+<body id="bod">
+
+<div style="background: #666 none; display: inline-block;" id="gameBoard"></div>
+<!-- gameboard's style attribute fixes a border glitch when zooming in or out -->
+
+<div id="numButtons"><br></div>
+
+<span id="notesToggle" class="notesToggleOff">notes editing off</span>
+<br><span id="undo" class="undo">undo</span>
+<br><br><input type="checkbox" id="erase"> erase mode<br>(only affects the clicking of solved cells)
+
+<pre id="timer">00:00</pre>
+
+<textarea id="textarea" rows="9" cols="9" maxlength="100"></textarea>
+<br>
+<input type="button" id="button" value="Load Puzzle">
+
+
+<script>
+
+const delay = 200;    // milliseconds to wait when temporarily coloring ("animating") things
+
+
+let playing;    // boolean
+let selectedNum;  // 0 means nothing selected; else 1 to 9
+let notesMode;  // boolean
+
+let start;   // milliseconds since epoch
+let x;       // setInterval()'s function
+
+
+/*
+  The main state variables...
+    board[9*row + col]        <-- 0 if an unknown
+    boardType[9*row + col]
+    notes[81*row + 9*col + num]   <-- possibilities at each cell; 0 <= num <= 8
+*/
+const board = new Uint8Array(81);
+const boardType = new Uint8Array(81);
+const notes = new Uint8Array(729);      // boolean array
+
+
+// when all of these are 9, then the puzzle has been solved
+const progress = new Uint8Array(10);  // 0th element is never used
+
+
+/*
+  Using the following words is more readable than using the integer literals.
+  The actual integer values are arbitrary as long as they are unique and Uint8.
+  These are used for boardType[].
+*/
+const unknown = 0;
+const clue    = 1;  // known initially
+const solved  = 2;
+const wrong   = 3;  // used for obviously-invalid input puzzles
+
+
+
+const bod = document.getElementById("bod");
+const gameBoard = document.getElementById("gameBoard");
+const numButtons = document.getElementById("numButtons");
+const notesToggle = document.getElementById("notesToggle");
+const undoButton = document.getElementById("undo");
+const eraseBox = document.getElementById("erase");
+const timer = document.getElementById("timer");
+const textarea = document.getElementById("textarea");
+const button = document.getElementById("button");
+
+
+/*
+  Storing the 81 elements and each of their 9 notes...
+    elements[90*row + 10*col + num]
+  where num=0 is one of the 81 elements. 0 <= num <= 9
+*/
+const elements = new Array(810);
+
+
+// storing elements of numButtons
+const elementsNum = new Array(10);  // 0th element not used
+
+
+/*
+  For the undo button.
+  Each element is an array that represents an action by the player...
+    [0, index, number] is adding or removing a note
+    [1, index, number] is erasing a number
+    [2, index, number, notes for that index, notes for that number] is placing a number
+  The array is shortened when the undo button is pressed.
+*/
+did = [];
+
+
+
+
+
+function update_timer() {
+
+    const elapsed = (Date.now() - start) / 1000;  // in seconds
+
+    const d = Math.floor( elapsed / (3600 * 24) );
+    const h = Math.floor( (elapsed % (3600 * 24)) / 3600 );
+    const m = Math.floor( (elapsed % 3600) / 60 );
+    const s = Math.floor( elapsed % 60 );
+
+    // convert to zero-padded strings
+    let hs;
+    let ms;
+    let ss;
+    if (h>9) {hs = h.toString();}
+    else {hs = "0" + h;}
+    if (m>9) {ms = m.toString();}
+    else {ms = "0" + m;}
+    if (s>9) {ss = s.toString();}
+    else {ss = "0" + s;}
+
+    // create string to display
+    let str;
+    if (d==0 && h==0) {str = ms + ":" + ss;}
+    else if (d==0) {str = hs + ":" + ms + ":" + ss;}
+    else {str = d.toString() + "d " + hs + ":" + ms + ":" + ss;}
+
+    timer.innerText = str;
+
+}
+
+
+
+
+
+
+
+function toggle_note_mode() {
+    notesMode = !notesMode;
+    if (notesMode) {
+        notesToggle.className = "notesToggleOn";
+        notesToggle.textContent = "notes editing on";
+
+        // update number buttons
+        for (let i=1; i<=9; i++) {
+            if (i == selectedNum) {
+                elementsNum[i].className = "number_button_notes_selected";
+            } else {
+                elementsNum[i].className = "number_button_notes";
+            }
+            if ( progress[i] == 9 ) {
+                elementsNum[i].classList.add("done");
+            }
+        }
+    } else {
+        notesToggle.className = "notesToggleOff";
+        notesToggle.textContent = "notes editing off";
+
+        // update number buttons
+        for (let i=1; i<=9; i++) {
+            if (i == selectedNum) {
+                elementsNum[i].className = "number_button_selected";
+            } else {
+                elementsNum[i].className = "number_button";
+            }
+            if ( progress[i] == 9 ) {
+                elementsNum[i].classList.add("done");
+            }
+        }
+    }
+}
+
+notesToggle.addEventListener( "click", () => toggle_note_mode() );
+
+
+
+
+
+
+
+
+function highlight(num, add) {
+    const numNotes = num - 1;
+    for (let i=0; i<81; i++) {
+        if (board[i] == num) {
+            if (add) {
+                elements[ 10*i ].classList.add( "highlighted" );
+            } else {
+                elements[ 10*i ].classList.remove( "highlighted" );
+            }
+        } else if (notes[i*9 + numNotes]) {
+            if (add) {
+                elements[ 10*i + num ].className = "noteboxHighlighted";
+            } else {
+                elements[ 10*i + num ].className = "notebox";
+            }
+        }
+    }
+}
+
+function unselect_number() {
+    if (notesMode) {
+        elementsNum[selectedNum].className = "number_button_notes";
+    } else {
+        elementsNum[selectedNum].className = "number_button";
+    }
+    if ( progress[selectedNum] == 9 ) {
+        elementsNum[selectedNum].classList.add("done");
+    }
+    highlight(selectedNum, false);
+    selectedNum = 0;
+}
+
+function select_number(num, numButtonPress = false) {
+    if (!playing) {
+        return;
+    }
+
+    if ( numButtonPress && progress[num]==9 ) {
+        return;
+    }
+
+    if (num != selectedNum) {
+        if (selectedNum) {
+            unselect_number();
+        }
+
+        // select new number
+        selectedNum = num;
+        if (notesMode) {
+            elementsNum[selectedNum].className = "number_button_notes_selected";
+        } else {
+            elementsNum[selectedNum].className = "number_button_selected";
+        }
+        if ( progress[selectedNum] == 9 ) {
+            elementsNum[selectedNum].classList.add("done");
+        }
+        highlight(selectedNum, true);
+    } else {
+        unselect_number();
+    }
+}
+
+// on a touch screen, this is touch-and-hold instead of a right click
+function clickNum_right(e, i) {
+    e.preventDefault();   // stop the context menu
+    select_number(i, true);  // do the exact same thing as a left click
+}
+
+// render number buttons and set event listeners
+for (let i = 1; i <= 9; i++) {
+    const cell = document.createElement("div");
+    cell.className = "number_button";
+    cell.textContent = i;
+    cell.addEventListener( "click", () => select_number(i, true) );
+    cell.addEventListener( "contextmenu", (e) => clickNum_right(e, i) );
+
+    numButtons.appendChild(cell);
+    elementsNum[i] = cell;
+}
+
+// allow number keys to change selected number
+document.addEventListener('keydown', (e) => {
+
+    // on non-mobile devices, without this, editing textarea via number keys changes selectedNum
+    if (document.activeElement.id == 'textarea') {
+        return;
+    } 
+
+    if ( "123456789".includes(e.key) ) {
+        select_number(Number(e.key));
+    }
+});
+
+
+
+
+
+
+// creates 9 div elements for displaying notes
+function render_notes(ind) {
+    const cell = elements[ ind*10 ];
+
+    for (let i = 0; i < 3; i++) {
+        for (let j = 0; j < 3; j++) {
+            const num = 3*i + j;  // num+1 is the number this noteCell might contain
+
+            const noteCell = document.createElement("div");
+            noteCell.className = "notebox";
+            if (notes[ ind*9 + num ]) {
+                noteCell.innerText = num+1;
+                if (selectedNum == (num+1)) {
+                    noteCell.className = "noteboxHighlighted";
+                }
+            }
+
+            cell.appendChild(noteCell);
+            elements[ 10*ind + num+1 ] = noteCell;
+        }
+        if (i<2) {
+            cell.appendChild( document.createElement("br") );
+        }
+    }
+}
+
+
+// sets notes[] to 0 (false); used when user places a number
+function update_notes(row, col, num) {   // 0 <= num <= 8
+
+    function remove_note(ind, num) {   //  0 <= ind < 729    0 <= num <= 8
+        if ( notes[ind] ) {
+            notes[ ind ] = 0;
+            if (selectedNum) {   // selectedNum is 0 when notes[] is being initialized
+                ind = Math.floor(ind/9);  //  0 <= ind < 81
+                const noteCell = elements[ 10*ind + num+1 ];
+                noteCell.innerText = "";
+                noteCell.className = "notebox";
+            }
+        }
+    }
+
+
+    // ind
+    for (let n = 0; n<9; n++) {
+        notes[ (row*9 + col)*9 + n ] = 0;
+    }
+
+    // row
+    for (let j = 0; j<9; j++) {
+        const ind = row*81 + j*9 + num;
+        remove_note(ind, num);
+    }
+
+
+    // col
+    for (let i = 0; i<9; i++) {
+        const ind = i*81 + col*9 + num;
+        remove_note(ind, num);
+    }
+
+    // block
+    const rowStart = Math.floor(row/3)*3;  // 0, 3, or 6
+    const colStart = Math.floor(col/3)*3;  // 0, 3, or 6
+    for (let i = 0; i<3; i++) {
+        for (let j = 0; j<3; j++) {
+            const ind = (rowStart + i)*81 + (colStart + j)*9 + num;
+            remove_note(ind, num);
+        }
+    }
+
+}
+
+
+// is it possible to replace a note at this row and col?  0 <= num <= 8
+function possible(row, col, num) {
+    num++;  // now 1 <= num <= 9
+
+    // ind
+    if ( boardType[ row*9 + col ] == clue || boardType[ row*9 + col ] == solved ) {
+        return false;
+    }
+
+    // row
+    for (let j = 0; j<9; j++) {
+        if (board[ row*9 + j ] == num) {
+            return false;
+        }
+    }
+
+    // col
+    for (let i = 0; i<9; i++) {
+        if (board[ i*9 + col ] == num) {
+            return false;
+        }
+    }
+
+    // block
+    const rowStart = Math.floor(row/3)*3;  // 0, 3, or 6
+    const colStart = Math.floor(col/3)*3;  // 0, 3, or 6
+    for (let i = 0; i<3; i++) {
+        for (let j = 0; j<3; j++) {
+            if (board[ (rowStart + i)*9 + (colStart + j) ] == num) {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+
+// sets notes[] to 1 (true); used when erasing a solved cell
+function replace_notes(row, col, num) {   // 0 <= num <= 8
+
+
+    function add_note(ind, num) {   //  0 <= ind < 729    0 <= num <= 8
+        num++;  // now 1 <= num <= 9
+
+        if ( !notes[ind] ) {
+            notes[ ind ] = 1;
+
+            ind = Math.floor(ind/9);  //  0 <= ind < 81
+            const noteCell = elements[ 10*ind + num ];
+            noteCell.innerText = num;
+            if ( selectedNum == num ) {
+                noteCell.className = "noteboxHighlighted";
+            } else {
+                noteCell.className = "notebox";
+            }
+        }
+    }
+
+
+    // ind
+    const index = row*9 + col;
+    for (let n = 0; n<9; n++) {
+        if ( possible(row,col,n) ) {
+            notes[ index*9 + n ] = 1;
+        }
+    }
+    render_notes(index);
+
+    // row
+    for (let j = 0; j<9; j++) {
+        if ( possible(row,j,num) ) {
+            const ind = row*81 + j*9 + num;
+            add_note(ind, num);
+        }
+    }
+
+
+    // col
+    for (let i = 0; i<9; i++) {
+        if ( possible(i,col,num) ) {
+            const ind = i*81 + col*9 + num;
+            add_note(ind, num);
+        }
+    }
+
+    // block
+    const rowStart = Math.floor(row/3)*3;  // 0, 3, or 6
+    const colStart = Math.floor(col/3)*3;  // 0, 3, or 6
+    for (let i = 0; i<3; i++) {
+        for (let j = 0; j<3; j++) {
+            const r = rowStart + i;
+            const c = colStart + j;
+            if ( possible(r,c,num) ) {
+                const ind = r*81 + c*9 + num;
+                add_note(ind, num);
+            }
+        }
+    }
+
+}
+
+
+
+
+
+
+function click(ind, rightClick = false) {
+
+    if ( !playing ) {
+
+        return;
+
+    } else if ( boardType[ind] == clue || boardType[ind] == solved ) {
+
+        const eraseMode = eraseBox.checked;
+
+        if ( boardType[ind] == clue || !eraseMode ) {
+
+            select_number(board[ind]);
+
+        } else if (boardType[ind] == solved) {  // set back to an unknown (erase)
+
+            did.push([1, ind, board[ind]]);
+
+            const cell = elements[ ind*10 ];
+            cell.textContent = "";
+            cell.className = "cell";
+
+            const num = board[ind];
+            progress[num]--;
+            if ( progress[num] == 8 ) {
+                elementsNum[num].classList.remove("done");
+            }
+            board[ind] = 0;
+            boardType[ind] = unknown;
+            replace_notes( Math.floor(ind/9), ind%9, num-1 );
+        }
+
+    } else {      // unknown
+
+        if (!selectedNum) { return; }
+
+        const num = selectedNum - 1;  // 0 to 8 for notes[]
+
+        if ( rightClick || notesMode ) {
+
+            const noteCell = elements[ 10*ind + selectedNum ];
+
+            if ( notes[ ind*9 + num ] ) {
+
+                did.push([0, ind, selectedNum]);
+
+                // turn off note
+                notes[ ind*9 + num ] = 0;
+                noteCell.innerText = "";
+                noteCell.className = "notebox";
+
+            } else {
+
+                if ( possible( Math.floor(ind/9), ind%9, num ) ) {
+
+                    did.push([0, ind, selectedNum]);
+
+                    // turn on note
+                    notes[ ind*9 + num ] = 1;
+                    noteCell.innerText = selectedNum;
+                    noteCell.className = "noteboxHighlighted";
+
+                } else {
+
+                    noteCell.innerText = selectedNum;
+                    noteCell.classList.add( "wrong_note" );
+                    playing = false;
+
+                    function turn_back_note(noteCell) {
+                        noteCell.innerText = "";
+                        noteCell.className = "notebox";
+                        playing = true;
+                    }
+
+                    setTimeout(turn_back_note, delay, noteCell);
+
+                }
+
+            }
+
+        } else {
+
+            const cell = elements[ ind*10 ];
+
+            if ( notes[ ind*9 + num ] ) {   // place number
+
+                const savedNotes = new Uint8Array(81);  // only the notes for num
+                let j = 0;      // j indexes savedNotes;
+                for (let k = num; k < 729; k += 9) {  // k indexes notes[]
+                    if ( notes[k] ) {
+                        savedNotes[j] = 1;
+                    } else {
+                        savedNotes[j] = 0;
+                    }
+                    j++;
+                }
+                did.push([ 2, ind, selectedNum, notes.slice( 9*ind, 9*ind + 9 ), savedNotes ]);
+
+                cell.innerHTML = selectedNum;
+                cell.className = "solved";
+                cell.classList.add( "highlighted" );
+
+                boardType[ind] = solved;
+                board[ind] = selectedNum;
+                update_notes( Math.floor(ind/9), ind%9, num );
+
+                progress[selectedNum]++;
+                if ( progress[selectedNum] == 9 ) {
+                    elementsNum[selectedNum].classList.add("done");
+
+                    let won = true;
+                    for (let k=1; k<=9; k++) {
+                        if ( progress[k] != 9 ) {
+                            won = false;
+                        }
+                    }
+
+                    if (won) {
+                        playing = false;
+                        bod.style.background = "#becafa none";
+                        highlight(selectedNum, false);
+
+                        clearInterval(x);  // turn off timer auto updating
+                        update_timer();    // get exact final time (never rounding up)
+                    } else {
+                        // select next available number
+                        let next = selectedNum;
+                        while (true) {
+                            next++;
+                            if (next==10) {next=1;}
+                            if ( progress[next] != 9 ) {break;}
+                        }
+                        select_number(next);
+                    }
+                }
+
+            } else {
+
+                const temp = Array.from(cell.children);  // Array.from() makes it static
+                cell.innerHTML = selectedNum;   // this would clobber anything live (not-static)
+                cell.classList.add( "wrong" );
+                playing = false;
+
+                function turn_back(cell, temp) {
+                    cell.replaceChildren(...temp);
+                    cell.className = "cell";
+                    playing = true;
+                }
+
+                setTimeout(turn_back, delay, cell, temp);
+
+            }
+
+        }
+
+    }
+
+}
+
+// on a touch screen, this is touch-and-hold instead of a right click
+function click_right(e, ind) {
+    e.preventDefault();   // stop the context menu
+    click(ind, true);
+}
+
+
+// create the nine 3-by-3 blocks
+for (let i = 0; i < 3; i++) {
+    for (let j = 0; j < 3; j++) {
+        const block = document.createElement("div");
+        block.className = "block";
+        block.setAttribute("id", ("b" + i) + j);
+        gameBoard.appendChild(block);
+    }
+    if (i<2) {
+        gameBoard.appendChild( document.createElement("br") );
+    }
+}
+
+// create cells and set event listeners
+for (let i = 0; i < 9; i++) {
+    for (let j = 0; j < 9; j++) {
+        const ind = 9*i + j;
+
+        const cell = document.createElement("div");
+        cell.className = "cell";
+        cell.addEventListener( "click", () => click(ind) );
+        cell.addEventListener( "contextmenu", (e) => click_right(e,ind) );
+
+        const block = document.getElementById( "b" + Math.floor(i/3) + Math.floor(j/3) );
+        block.appendChild(cell);
+        elements[ ind*10 ] = cell;
+
+        if ( j%3 == 2 && i%3 < 2 ) {
+            block.appendChild( document.createElement("br") );
+        }
+    }
+}
+
+
+
+
+function undo() {
+
+    if ( !playing || !did.length ) {
+        return;
+    }
+
+    const revertTo = did.pop();
+
+    const type = revertTo[0];
+    const ind = revertTo[1];
+    const number = revertTo[2];
+
+    if (type == 0) {  // adding or removing notes
+
+        const index = 9*ind + number-1;
+        const noteCell = elements[ 10*ind + number ];
+
+        if ( notes[index] ) {
+
+            // turn off note
+            notes[index] = 0;
+            noteCell.innerText = "";
+            noteCell.className = "notebox";
+
+        } else {
+
+            // turn on note
+            notes[index] = 1;
+            noteCell.innerText = number;
+            if ( number == selectedNum ) {
+                noteCell.className = "noteboxHighlighted";
+            }
+
+        }
+
+        // get the change to "flash" so player can notice it
+        noteCell.classList.add( "undid_note" );
+        playing = false;
+        function turn_back_highlight(noteCell) {
+            noteCell.classList.remove( "undid_note" );
+            playing = true;
+        }
+        setTimeout(turn_back_highlight, delay, noteCell);
+
+    } else if (type == 1) {  // undoing a number being erased
+
+        const num = number - 1;  // 0 to 8 for notes[]
+        const cell = elements[ ind*10 ];
+
+        // I should probably make the following a function since it is so similar to
+        // previous code that placed a number
+
+        cell.innerHTML = number;
+        cell.className = "solved";
+        if ( number == selectedNum ) {
+            cell.classList.add( "highlighted" );
+        }
+
+        boardType[ind] = solved;
+        board[ind] = number;
+        update_notes( Math.floor(ind/9), ind%9, num );
+
+        progress[number]++;
+        if ( progress[number] == 9 ) {
+            elementsNum[number].classList.add("done");
+
+            if ( number == selectedNum ) {  // select next selectedNum
+                let next = selectedNum;
+                while (true) {
+                    next++;
+                    if (next==10) {next=1;}
+                    if ( progress[next] != 9 ) {break;}
+                }
+                select_number(next);
+            }
+        }
+
+
+        // get the change to "flash" so player can notice it
+        cell.classList.add( "undid_cell" );
+        playing = false;
+        function turn_back_highlight(cell) {
+            cell.classList.remove( "undid_cell" );
+            playing = true;
+        }
+        setTimeout(turn_back_highlight, delay, cell);
+
+    } else {   // undoing the placing of a number
+
+        const cell = elements[ ind*10 ];
+        cell.textContent = "";
+        cell.className = "cell";
+
+        progress[number]--;
+        if ( progress[number] == 8 ) {
+            elementsNum[number].classList.remove("done");
+        }
+        board[ind] = 0;
+        boardType[ind] = unknown;
+
+        // revert notes at ind
+        for (let k=0; k<9; k++) {
+            notes[ ind*9 + k ] = revertTo[3][k];
+        }
+        render_notes(ind);   // set create the div tags, and set highlighting and innerText
+
+        // revert notes that represent number
+        let i = 0;           // i indexes revertTo[4]
+        let j = number;      // j indexes elements[]
+        for (let k = number-1; k < 729; k += 9) {  // k indexes notes[]
+            if ( revertTo[4][i] && !notes[k] ) {
+                notes[k] = 1;
+                elements[j].innerText = number;
+                if ( number == selectedNum ) {
+                    elements[j].className = "noteboxHighlighted";
+                } else {
+                    elements[j].className = "notebox";
+                }
+            }
+            i++;
+            j += 10;
+        }
+
+        // get the change to "flash" so player can notice it
+        let noteCells = [];
+        for (let j=0; j<9; j++) {
+            //if ( notes[ ind*9 + j ] ) {
+                const noteCell = elements[ 10*ind + j+1 ];
+                noteCell.classList.add( "undid_note" );  // I assume this adds it to the END of the list
+                noteCells.push(noteCell);
+            //}
+        }
+        playing = false;
+        function turn_back_highlight(noteCells) {
+            for (let i=0; i<noteCells.length; i++) {
+                noteCells[i].classList.remove( "undid_note" );
+            }
+            playing = true;
+        }
+        setTimeout(turn_back_highlight, delay, noteCells);
+
+    }
+
+}
+
+// on a touch screen, this is touch-and-hold instead of a right click
+function undo_right(e) {
+    e.preventDefault();   // stop the context menu
+    undo();  // do the exact same thing as a left click
+}
+
+undoButton.addEventListener( "click", () => undo() );
+undoButton.addEventListener( "contextmenu", (e) => undo_right(e) );
+
+
+
+
+
+
+function set_new_puzzle(puzzle) {
+
+    // set (or reset) some things
+    bod.style.background = "";
+    playing = true;
+    if (selectedNum) {unselect_number();}
+    notesMode = false;
+    notesToggle.className = "notesToggleOff";
+    notesToggle.textContent = "notes editing off";
+    for (let i=1; i<=9; i++) {
+        progress[i] = 0;
+        elementsNum[i].className = "number_button";
+    }
+    clearInterval(x);  // turn off any timer auto updating
+    timer.innerText = "00:00";
+
+
+    puzzle = puzzle.replace(/\s+/g,'');   // remove all whitespace
+
+    if ( puzzle.length != 81 ) {
+        playing = false;
+        bod.style.background = "#f00 none";
+        alert("ERROR: not 81 non-whitespace characters in puzzle");
+    }
+
+
+
+    /*
+      Initialize the main state variables.
+      Check for obvious contradictions.
+    */
+    for (let i=0; i<729; i++){
+        notes[i] = 1;   // initialize all to true
+    }
+    for (let i = 0; i < Math.min(81, puzzle.length); i++) {
+        let num = Number(puzzle[i]);
+        if ( !isNaN(num) && num > 0 ) {
+            board[i] = num;
+            boardType[i] = clue;
+            progress[num]++;
+
+            num--;  // now 0 to 8 for notes[]
+            if ( notes[ i*9 + num ] == 0 ) {
+                boardType[i] = wrong;
+                if (playing) {
+                    playing = false;
+                    bod.style.background = "#f00 none";
+                    alert("ERROR: Sudoku contains an obvious contradiction");
+                }
+            }
+            update_notes( Math.floor(i/9), i%9, num );
+        } else {
+            board[i] = 0;
+            boardType[i] = unknown;
+        }
+    }
+    for (let i = puzzle.length; i < 81; i++) {
+        board[i] = 0;
+        boardType[i] = unknown;
+    }
+
+
+    // check progress
+    for (let i=1; i<=9; i++) {
+        if (progress[i] == 9) {
+            elementsNum[i].classList.add("done");
+        }
+    }
+
+
+    // set HTML to initial board
+    for (let i = 0; i < 9; i++) {
+        for (let j = 0; j < 9; j++) {
+            const ind = 9*i + j;
+
+            const cell = elements[ ind*10 ];
+            if ( boardType[ind] == clue ) {
+                cell.className = "clue" ;
+                cell.innerHTML = board[ind];
+            } else if ( boardType[ind] == wrong ) {
+                cell.className = "clue";
+                cell.classList.add( "wrong" );
+                cell.innerHTML = board[ind];
+            } else {
+                cell.className = "cell";
+                cell.innerHTML = "";
+                render_notes(ind);
+            }
+
+        }
+    }
+
+    if (playing) {
+        start = Date.now();
+        x = setInterval(update_timer, 100);  // update every 100ms. Uses CPU!
+    }
+
+}
+
+function new_puzzle() {
+    set_new_puzzle(textarea.value);
+}
+
+button.addEventListener('click', new_puzzle);
+
+
+
+set_new_puzzle(puzzle);
+
+
+
+</script>
+
+</body>
+</html>
