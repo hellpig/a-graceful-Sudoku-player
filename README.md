@@ -9,6 +9,8 @@ A Sudoku player that is geared towards gracefully solving difficult Sudokus. Nea
 * uses "number first" input. To place a number, select the number *then* place it
 * nicely highlights notes and numbers of the selected number
 
+![sample image](screenshot.png)
+
 Depending on your device...
 * Instead of turning notes-editing on, you can always right click to edit notes. On a mobile-device, this is touch-and-hold. When I play, I never turn notes-editing on (I right click).
 * Less useful, but, with a keyboard, you can also use number keys to select numbers.
@@ -23,7 +25,7 @@ If you are on a mobile device and cannot easily download and display the HTML fi
 
 # another great Sudoku player
 
-I was inspired by the following great Sudoku app...  
+I was inspired by the following great Sudoku app by [Guru Game](https://gurugame.fun/)...  
 [https://play.google.com/store/apps/details?id=sudoku.puzzle.free.game.brain](https://play.google.com/store/apps/details?id=sudoku.puzzle.free.game.brain) for Android  
 [https://apps.apple.com/us/app/sudoku-puzzle-brain-games/id1492978794](https://apps.apple.com/us/app/sudoku-puzzle-brain-games/id1492978794) for iOS
 
@@ -31,13 +33,13 @@ Unlike this app, my player does not require watching ads and lets you load your 
 
 Pros of their app over mine...
 * Theirs looks nicer on mobile devices, partly due to nice screen autofill and no risk of webpage scrolling. Though, being only an app, their computer compatibility is horrible.
-* Theirs can give you a hint that includes the reason why the move can be made, though their hints are too much. Just tell me the TYPE of strategy to look for rather than the exact where and why of it. Note that all of their puzzles can be solved using only a small subset of strategies, and watching ads is required to get hints. My next goal would be to provide a button that would list which strategies can be currently done.
+* Theirs can give you a hint that includes the reason why the move can be made, though their hints are too much. Just tell me the *type* of strategy to look for rather than the exact where and why of it. Note that all of their puzzles can be solved using only a small subset of strategies, and watching ads is required to get hints. My next goal would be to provide a button that would list which strategies can be currently done.
 
 
 
 # my thoughts
 
-This is the first time in my life I have focused on making a GUI. The experience was, as expected, less mathematical and more organizational, which felt tedious at times (especially CSS), but directly seeing the graphical results was rewarding! The code took more time than I expected (4 days), so I now have more empathy for my high school computer-science students who often make GUIs for their projects.
+This is the first time in my life I have focused on making a GUI. The experience was, as expected, less mathematical and more organizational, which felt tedious at times (especially CSS), but directly seeing the graphical results was rewarding! The code took more time than I expected (4 days), so I now have more empathy for my high school computer-science students who often make GUIs for their projects. I got the idea to have a dark-mode setting, but this would be *feature creep* (too much complexity for too little gain).
 
 Normally, I would be more interested in *generating* (and solving) Sudokus with code, but this has been thoroughly accomplished! The code, Tdoku, is at [https://github.com/t-dillon/tdoku](https://github.com/t-dillon/tdoku).
 Using their code, you can generate a random Sudoku by running
@@ -65,6 +67,5 @@ In solver_dpll_triad_simd.cc, I commented out
 ```
 
 The goal of my Sudoku player is to make solving difficult Sudokus less tedious. However, the advanced strategies themselves become tedious to search for manually. What is now interesting to me is trying to find the *fastest* way of solving difficult Sudokus. Towards this goal, if I were to ever do more coding for Sudokus, I would try to do analyses such as this: [https://www.sudokuwiki.org/The_Relative_Incidence_of_Sudoku_Strategies](https://www.sudokuwiki.org/The_Relative_Incidence_of_Sudoku_Strategies). Even the amazing Tdoku code above does not evaluate the difficulty of Sudokus based on using these strategies, so a strategy-based solver could be added to the Tdoku code. Making this strategy-based code would help me allow my Sudoku player provide strategy hints to the user.
-
 
 
