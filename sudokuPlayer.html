@@ -22,10 +22,10 @@ so my player does the following...
 
 Depending on your device...
 - Instead of turning notes-editing on, you can always right click
-  to edit notes. On a mobile-device, this is touch-and-hold.
+  to edit notes. On a mobile device, this is touch-and-hold.
   When I play, I never turn notes-editing on (I right click).
 - Less useful, but, with a keyboard, you can also use
-  number keys to select numbers.
+  the number keys to select numbers.
 
 I was inspired by the following great Sudoku app...
   https://play.google.com/store/apps/details?id=sudoku.puzzle.free.game.brain
@@ -38,9 +38,8 @@ I cannot alert the player when a number is placed incorrectly.
   Mine is a player, not a solver, so I don't know the solution.
   I do alert the player when a number that disagrees with the notes is placed.
 Pros of their app over mine...
-- Theirs looks nicer on mobile devices, partly due to nice screen autofill
-  and no risk of webpage scrolling. Though, being only an app, their computer
-  compatibility is horrible.
+- Theirs looks nicer on mobile devices, partly due to nice screen autofill.
+  Though, being only an app, their computer compatibility is horrible.
 - Theirs can give you a hint that includes the reason why the move can be made,
   though their hints are too much. Just tell me the TYPE of strategy to look for
   rather than the exact where and why of it. Note that all of their puzzles can
@@ -88,38 +87,51 @@ body {
     white-space: nowrap;
 }
 
-.block {
-    width: 96px;
-    height: 96px;
-    border: 1px solid #666;
-    display: inline-block;
-    vertical-align: middle;
-    font-size: 1px;  /* font-size affects vertical-align! inherited */
+/* The Container for the 9 blocks */
+#gameBoard {
+    display: grid;
+    grid-template-columns: repeat(3, 98px); /* 96px + 2px for block borders */
+    justify-content: center;
 }
+
+.block {
+    width: 98px; /* (32px * 3) + 2px for its own borders */
+    height: 98px;
+    border: 1px solid #666;
+    background-color: #666;   /* fixes page background leaking into board when zooming */
+    display: grid;
+    grid-template-columns: repeat(3, 32px);
+    grid-template-rows: repeat(3, 32px);
+    box-sizing: border-box;
+    touch-action: none;     /* for stopping scrolling and zooming via here */
+}
+
 
 
 .cell, .clue, .solved {
-    width: 30px;
-    height: 30px;
+    width: 32px;
+    height: 32px;
     background-color: #fff;
-    border: 1px solid #ccc;  /* adds 2 pixels to width and height */
-    display: inline-block;
-    vertical-align: middle;
-    text-align: center;
+    border: 1px solid #ccc;
+    box-sizing: border-box;
+    
+    display: flex;
+    flex-wrap: wrap;         /* Allows 9 notes to wrap into rows */
+    justify-content: center; /* Horizontal center */
+    align-content: center;   /* Vertical center */
+    
     cursor: pointer;
     user-select: none;
+    font-size: 25px;   /* Adjust based on your preference for solved numbers */
 }
 .solved {
-    font-size: 25px;
     color: #008;
 }
 .clue {
-    font-size: 25px;
     color: #000;
 }
 
 .wrong {
-    font-size: 25px;
     color: #f00;
 }
 
@@ -131,9 +143,9 @@ body {
 .notebox, .noteboxHighlighted {
     width: 9px;
     height: 9px;
-    display: inline-block;
-    vertical-align: middle;
-    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     font-size: 7px;
 }
 .notebox {
@@ -163,6 +175,7 @@ body {
     font-size: 30px;
     cursor: pointer;
     user-select: none;
+    touch-action: none;    /* for stopping scrolling and zooming via here */
 }
 .number_button {
     border: 2px solid rgba(255,255,255,0);
@@ -193,6 +206,10 @@ body {
     font-size: 150%;
     cursor: pointer;
     user-select: none;
+
+    /* for stopping scrolling and zooming via here */
+    display: inline-block;
+    touch-action: none;
 }
 .notesToggleOn {
     color: #000;
@@ -209,6 +226,10 @@ body {
     color: #a00;
     cursor: pointer;
     user-select: none;
+
+    /* for stopping scrolling and zooming via here */
+    display: inline-block
+    touch-action: none;
 }
 
 </style>
@@ -224,8 +245,7 @@ body {
 
 <body id="bod">
 
-<div style="background: #666 none; display: inline-block;" id="gameBoard"></div>
-<!-- gameboard's style attribute fixes a border glitch when zooming in or out -->
+<div id="gameBoard"></div>
 
 <div id="numButtons"><br></div>
 
@@ -247,12 +267,14 @@ body {
 const delay = 200;    // milliseconds to wait when temporarily coloring ("animating") things
 
 
-let playing;    // boolean
+let playing;      // boolean
+let animating = false;  // created to prevent a very rare bug when loading a new level while something is animating
 let selectedNum;  // 0 means nothing selected; else 1 to 9
 let notesMode;  // boolean
 
 let start;   // milliseconds since epoch
-let x;       // setInterval()'s function
+let x;       // for requestAnimationFrame()
+let previousSeconds = 0;
 
 
 /*
@@ -313,7 +335,7 @@ const elementsNum = new Array(10);  // 0th element not used
     [2, index, number, notes for that index, notes for that number] is placing a number
   The array is shortened when the undo button is pressed.
 */
-did = [];
+const did = [];
 
 
 
@@ -321,31 +343,39 @@ did = [];
 
 function update_timer() {
 
-    const elapsed = (Date.now() - start) / 1000;  // in seconds
+    const elapsed = Math.floor((Date.now() - start) / 1000);  // in seconds
 
-    const d = Math.floor( elapsed / (3600 * 24) );
-    const h = Math.floor( (elapsed % (3600 * 24)) / 3600 );
-    const m = Math.floor( (elapsed % 3600) / 60 );
-    const s = Math.floor( elapsed % 60 );
+    // update_timer() will be run frequently, so let's be nice to the CPU and only do real work when necessary
+    if (elapsed > previousSeconds) {
+        previousSeconds = elapsed;
 
-    // convert to zero-padded strings
-    let hs;
-    let ms;
-    let ss;
-    if (h>9) {hs = h.toString();}
-    else {hs = "0" + h;}
-    if (m>9) {ms = m.toString();}
-    else {ms = "0" + m;}
-    if (s>9) {ss = s.toString();}
-    else {ss = "0" + s;}
+        const d = Math.floor( elapsed / (3600 * 24) );
+        const h = Math.floor( (elapsed % (3600 * 24)) / 3600 );
+        const m = Math.floor( (elapsed % 3600) / 60 );
+        const s = Math.floor( elapsed % 60 );
 
-    // create string to display
-    let str;
-    if (d==0 && h==0) {str = ms + ":" + ss;}
-    else if (d==0) {str = hs + ":" + ms + ":" + ss;}
-    else {str = d.toString() + "d " + hs + ":" + ms + ":" + ss;}
+        // convert to zero-padded strings
+        let hs;
+        let ms;
+        let ss;
+        if (h>9) {hs = h.toString();}
+        else {hs = "0" + h;}
+        if (m>9) {ms = m.toString();}
+        else {ms = "0" + m;}
+        if (s>9) {ss = s.toString();}
+        else {ss = "0" + s;}
 
-    timer.innerText = str;
+        // create string to display
+        let str;
+        if (d==0 && h==0) {str = ms + ":" + ss;}
+        else if (d==0) {str = hs + ":" + ms + ":" + ss;}
+        else {str = d.toString() + "d " + hs + ":" + ms + ":" + ss;}
+
+        timer.innerText = str;
+
+    }
+
+    x = requestAnimationFrame(update_timer);
 
 }
 
@@ -516,9 +546,6 @@ function render_notes(ind) {
 
             cell.appendChild(noteCell);
             elements[ 10*ind + num+1 ] = noteCell;
-        }
-        if (i<2) {
-            cell.appendChild( document.createElement("br") );
         }
     }
 }
@@ -745,11 +772,13 @@ function click(ind, rightClick = false) {
                     noteCell.innerText = selectedNum;
                     noteCell.classList.add( "wrong_note" );
                     playing = false;
+                    animating = true;
 
                     function turn_back_note(noteCell) {
                         noteCell.innerText = "";
                         noteCell.className = "notebox";
                         playing = true;
+                        animating = false;
                     }
 
                     setTimeout(turn_back_note, delay, noteCell);
@@ -800,7 +829,7 @@ function click(ind, rightClick = false) {
                         bod.style.background = "#becafa none";
                         highlight(selectedNum, false);
 
-                        clearInterval(x);  // turn off timer auto updating
+                        cancelAnimationFrame(x);  // turn off timer auto updating
                         update_timer();    // get exact final time (never rounding up)
                     } else {
                         // select next available number
@@ -820,11 +849,13 @@ function click(ind, rightClick = false) {
                 cell.innerHTML = selectedNum;   // this would clobber anything live (not-static)
                 cell.classList.add( "wrong" );
                 playing = false;
+                animating = true;
 
                 function turn_back(cell, temp) {
                     cell.replaceChildren(...temp);
                     cell.className = "cell";
                     playing = true;
+                    animating = false;
                 }
 
                 setTimeout(turn_back, delay, cell, temp);
@@ -852,9 +883,6 @@ for (let i = 0; i < 3; i++) {
         block.setAttribute("id", ("b" + i) + j);
         gameBoard.appendChild(block);
     }
-    if (i<2) {
-        gameBoard.appendChild( document.createElement("br") );
-    }
 }
 
 // create cells and set event listeners
@@ -870,10 +898,6 @@ for (let i = 0; i < 9; i++) {
         const block = document.getElementById( "b" + Math.floor(i/3) + Math.floor(j/3) );
         block.appendChild(cell);
         elements[ ind*10 ] = cell;
-
-        if ( j%3 == 2 && i%3 < 2 ) {
-            block.appendChild( document.createElement("br") );
-        }
     }
 }
 
@@ -918,9 +942,11 @@ function undo() {
         // get the change to "flash" so player can notice it
         noteCell.classList.add( "undid_note" );
         playing = false;
+        animating = true;
         function turn_back_highlight(noteCell) {
             noteCell.classList.remove( "undid_note" );
             playing = true;
+            animating = false;
         }
         setTimeout(turn_back_highlight, delay, noteCell);
 
@@ -961,9 +987,11 @@ function undo() {
         // get the change to "flash" so player can notice it
         cell.classList.add( "undid_cell" );
         playing = false;
+        animating = true;
         function turn_back_highlight(cell) {
             cell.classList.remove( "undid_cell" );
             playing = true;
+            animating = false;
         }
         setTimeout(turn_back_highlight, delay, cell);
 
@@ -1013,11 +1041,13 @@ function undo() {
             //}
         }
         playing = false;
+        animating = true;
         function turn_back_highlight(noteCells) {
             for (let i=0; i<noteCells.length; i++) {
                 noteCells[i].classList.remove( "undid_note" );
             }
             playing = true;
+            animating = false;
         }
         setTimeout(turn_back_highlight, delay, noteCells);
 
@@ -1041,6 +1071,8 @@ undoButton.addEventListener( "contextmenu", (e) => undo_right(e) );
 
 function set_new_puzzle(puzzle) {
 
+    if (animating) return;
+
     // set (or reset) some things
     bod.style.background = "";
     playing = true;
@@ -1052,15 +1084,18 @@ function set_new_puzzle(puzzle) {
         progress[i] = 0;
         elementsNum[i].className = "number_button";
     }
-    clearInterval(x);  // turn off any timer auto updating
+    did.length = 0;
+    eraseBox.checked = false;
+    cancelAnimationFrame(x);  // turn off any timer auto updating
     timer.innerText = "00:00";
+    previousSeconds = 0;
 
 
     puzzle = puzzle.replace(/\s+/g,'');   // remove all whitespace
 
     if ( puzzle.length != 81 ) {
         playing = false;
-        bod.style.background = "#f00 none";
+        bod.style.background = "#f33 none";
         alert("ERROR: not 81 non-whitespace characters in puzzle");
     }
 
@@ -1085,7 +1120,7 @@ function set_new_puzzle(puzzle) {
                 boardType[i] = wrong;
                 if (playing) {
                     playing = false;
-                    bod.style.background = "#f00 none";
+                    bod.style.background = "#f33 none";
                     alert("ERROR: Sudoku contains an obvious contradiction");
                 }
             }
@@ -1133,7 +1168,7 @@ function set_new_puzzle(puzzle) {
 
     if (playing) {
         start = Date.now();
-        x = setInterval(update_timer, 100);  // update every 100ms. Uses CPU!
+        x = requestAnimationFrame(update_timer);
     }
 
 }
@@ -1147,6 +1182,7 @@ button.addEventListener('click', new_puzzle);
 
 
 set_new_puzzle(puzzle);
+//textarea.value = puzzle.trim();   // makes the screen ugly
 
 
 

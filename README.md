@@ -12,8 +12,8 @@ A Sudoku player that is geared towards gracefully solving difficult Sudokus. Nea
 ![sample image](screenshot.png)
 
 Depending on your device...
-* Instead of turning notes-editing on, you can always right click to edit notes. On a mobile-device, this is touch-and-hold. When I play, I never turn notes-editing on (I right click).
-* Less useful, but, with a keyboard, you can also use number keys to select numbers.
+* Instead of turning notes-editing on, you can always right click to edit notes. On a mobile device, this is touch-and-hold. When I play, I never turn notes-editing on (I right click).
+* Less useful, but, with a keyboard, you can also use the number keys to select numbers.
 
 When loading a puzzle, whitespace is ignored. Anything else not 1-9 is considered a blank (I prefer using *0*s). The number of solutions is not checked because this is a player, not a solver. However, if any of the clues have obvious contradictions (more than one of the same number in same row, column, or block), this is detected.
 
@@ -32,12 +32,12 @@ I was inspired by the following great Sudoku app by [Guru Game](https://gurugame
 Unlike this app, my player does not require watching ads and lets you load your own puzzle, and mine does not have the constant risk of accidentally leaving "number first" mode. I cannot alert the player when a number is placed incorrectly. This could be a pro or a con depending on your preference. Mine is a player, not a solver, so I don't know the solution. I do alert the player when a number that disagrees with the notes is placed.
 
 Pros of their app over mine...
-* Theirs looks nicer on mobile devices, partly due to nice screen autofill and no risk of webpage scrolling. Though, being only an app, their computer compatibility is horrible.
+* Theirs looks nicer on mobile devices, partly due to nice screen autofill. Though, being only an app, their computer compatibility is horrible.
 * Theirs can give you a hint that includes the reason why the move can be made, though their hints are too much. Just tell me the *type* of strategy to look for rather than the exact where and why of it. Note that all of their puzzles can be solved using only a small subset of strategies, and watching ads is required to get hints. My next goal would be to provide a button that would list which strategies can be currently done.
 
 
 
-# my thoughts
+# development notes
 
 This is the first time in my life I have focused on making a GUI. The experience was, as expected, less mathematical and more organizational, which felt tedious at times (especially CSS), but directly seeing the graphical results was rewarding! The code took more time than I expected (4 days), so I now have more empathy for my high school computer-science students who often make GUIs for their projects. I got the idea to have a dark-mode setting, but this would be *feature creep* (too much complexity for too little gain).
 
