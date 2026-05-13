@@ -83,7 +83,7 @@ const puzzle = `
 body {
     font-family: Arial, sans-serif;
     text-align: center;
-    background: #fff none;
+    background: #fff none;   /* #cfd8dc would be a bit better for phone batteries */
     white-space: nowrap;
 }
 
@@ -829,8 +829,7 @@ function click(ind, rightClick = false) {
                         bod.style.background = "#becafa none";
                         highlight(selectedNum, false);
 
-                        cancelAnimationFrame(x);  // turn off timer auto updating
-                        update_timer();    // get exact final time (never rounding up)
+                        cancelAnimationFrame(x);  // turn off timer auto updating (never rounding up) 
                     } else {
                         // select next available number
                         let next = selectedNum;
